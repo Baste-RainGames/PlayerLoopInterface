@@ -27,6 +27,14 @@ public static void MyCustomSystem {
 }
 ```` 
 
+## Known Issues
+
+- There's a RunInFixedUpdate flag you can add to methods, but it doesn't work. I believe that I'm doing the "correct" thing, but there's a bug in Unity that makes it not work.
+
+- Might not work with DOTS! I haven't tried. You won't need this in a DOTS-based world, since that's made to run your own systems in a different way.
+
+- The PlayerLoopInterface resets the player loop to the default loop when you exit play mode. This doesn't happen automatically, and is neccessary to prevent your systems from running at edit time. This is, according to Unity, "by design". The player loop does get reset if you have the Entities package installed (last I checked), so this package might have conflicts with that.
+
 
 ## Installation
 
