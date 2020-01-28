@@ -15,9 +15,9 @@ PlayerLoopInterface.InsertSystemBefore(typeof(MyType), MyMethod, typeof(UnityEng
 
 Modify your Packages/Manifest.json to include this package:
 
-`
+```
 {
   "dependencies": {
     "com.baste.playerloopinterface": "https://github.com/Baste-RainGames/PlayerLoopInterface.git",`
     ...
-`
+```
