@@ -4,13 +4,8 @@ using System.Linq;
 using System.Text;
 
 using UnityEngine;
-#if UNITY_2019_1_OR_NEWER
-using UnityEngine.LowLevel;
-using UnityEngine.PlayerLoop;
-#else
 using UnityEngine.Experimental.LowLevel;
 using UnityEngine.Experimental.PlayerLoop;
-#endif
 
 /// <summary>
 /// Unity exposes the PlayerLoop to allow you to insert your own "systems" to be run in similar ways to eg. Update or FixedUpate.
