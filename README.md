@@ -14,13 +14,13 @@ The built-in systems live in UnityEngine.Experimental.PlayerLoop.
 Here's an example that adds an entry point that will be called every frame, just before Update:
 
 ```cs
-public static void MyCustomSystem {
+public static class MyCustomSystem {
 
     [RuntimeInitializeOnLoadMethod]
     private static void Initialize() {
-        PlayerLoopInterface.InsertSystemBefore(typeof(MyCustomSystem), UpdateSystem, typeof(UnityEngine.Experimental.PlayerLoop.Update);
+        PlayerLoopInterface.InsertSystemBefore(typeof(MyCustomSystem), UpdateSystem, typeof(UnityEngine.PlayerLoop.Update));
     }
-    
+
     private static void UpdateSystem() {
         Debug.Log("I get called once per frame!");
     }
