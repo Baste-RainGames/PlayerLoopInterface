@@ -8,8 +8,9 @@ The interface for that is a bit hairy, and there are bugs that needs workarounds
 
 ## Installation
 
-Modify your Packages/Manifest.json to include this package:
+Hit the "Add package from git URL..." button in the package manager, and enter https://github.com/Baste-RainGames/PlayerLoopInterface.git
 
+In older Unity versions, or if you don't want to open Unity, modify your Packages/Manifest.json to include this package:
 ```
 {
   "dependencies": {
