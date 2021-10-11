@@ -15,3 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better overall documentation
 ### Changed
 - Replaced a bunch of different internal logging functions with one good one.
+
+## [2.0.1] - 2021-10-11
+### Added
+- Minor doc improvements
+- Update package.json to have documentation, changelog and license url's.
