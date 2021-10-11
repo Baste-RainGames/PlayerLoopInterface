@@ -1,0 +1,17 @@
+# Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - not changelogged properly
+- Initial version
+
+## [2.0.0] - 2021-10-11
+### Removed
+- Removed the runInFixedUpdate parameter, as it didn't do anything.
+### Added
+- Updated the docs to say how to actually run things in FixedUpdate.
+- Better overall documentation
+### Changed
+- Replaced a bunch of different internal logging functions with one good one.
