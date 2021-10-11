@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Text;
-
 using UnityEngine;
 
 #if UNITY_2020_1_OR_NEWER
 using UnityEngine.LowLevel;
-using UnityEngine.PlayerLoop;
 #else
 using UnityEngine.Experimental.LowLevel;
 using UnityEngine.Experimental.PlayerLoop;
@@ -20,15 +18,19 @@ using UnityEngine.Experimental.PlayerLoop;
 /// In essence, use PlayerLoopInterface.InsertSystemBefore/After to have a callback be executed every frame, before or after some built-in system.
 /// The built-in systems live in UnityEngine.Experimental.PlayerLoop, so if you want to insert a system to run just before Update, call:
 ///
-/// PlayerLoopInterface.InsertSystemBefore(typeof(MyType), MyMethod, typeof(UnityEngine.Experimental.PlayerLoop.Update);
+/// PlayerLoopInterface.InsertSystemBefore(typeof(MyType), MyMethod, typeof(UnityEngine.PlayerLoop.Update);
+///
+/// If you want to run in the fixed timestep (FixedUpdate), you have to insert the system as a subsystem of UnityEngine.PlayerLoop.FixedUpdate. For example, use
+/// UnityEngine.PlayerLoop.FixedUpdate.ScriptRunBehaviourFixedUpdate:
+///
+/// PlayerLoopInterface.InsertSystemBefore(typeof(MyType), MyMethod, typeof(UnityEngine.PlayerLoop.FixedUpdate.ScriptRunBehaviourFixedUpdate);
 /// </summary>
 public static class PlayerLoopInterface {
 
     private static bool hasFetchedSystem;
-    private static IntPtr fixedUpdateLoopCondition;
 
-    private static PlayerLoopSystem defaultSystem;
-    internal static PlayerLoopSystem system;
+    // We write to this
+    private static PlayerLoopSystem rootSystem;
 
     [RuntimeInitializeOnLoadMethod]
     private static void Initialize() {
@@ -39,13 +41,9 @@ public static class PlayerLoopInterface {
         if (hasFetchedSystem)
             return;
 
-        defaultSystem = PlayerLoop.GetDefaultPlayerLoop();
-        system = CopySystem(defaultSystem);
+        var defaultSystem = PlayerLoop.GetDefaultPlayerLoop();
+        rootSystem = CopySystem(defaultSystem);
         hasFetchedSystem = true;
-
-        if (!TryFetchFixedUpdatePointer(system))
-            Debug.LogError("Couldn't find FixedUpdate in the built-in player loop systems! This means that setting runInFixedUpdate to true in " +
-                           "InsertSystemBefore or After won't work!");
 
         // if the Entities package is not installed, any systems registered keeps running after we leave play mode.
         // This is "intended behaviour". Not joking. https://fogbugz.unity3d.com/default.asp?1089518_lub560iemcggi1c9
@@ -65,12 +63,8 @@ public static class PlayerLoopInterface {
     /// <param name="newSystemMarker">Type marker for the new system.</param>
     /// <param name="newSystemUpdate">Callback that will be called each frame after insertAfter.</param>
     /// <param name="insertAfter">The subsystem to insert the system after.</param>
-    /// <param name="runInFixedUpdate">Set the loop condition function to the same as the built-in FixedUpdate. NOTE: This doesn't work!</param>
-    public static void InsertSystemAfter(Type newSystemMarker, PlayerLoopSystem.UpdateFunction newSystemUpdate, Type insertAfter, bool runInFixedUpdate = false) {
+    public static void InsertSystemAfter(Type newSystemMarker, PlayerLoopSystem.UpdateFunction newSystemUpdate, Type insertAfter) {
         var playerLoopSystem = new PlayerLoopSystem {type = newSystemMarker, updateDelegate = newSystemUpdate};
-        if (runInFixedUpdate)
-            playerLoopSystem.loopConditionFunction = fixedUpdateLoopCondition;
-
         InsertSystemAfter(playerLoopSystem, insertAfter);
     }
 
@@ -80,11 +74,8 @@ public static class PlayerLoopInterface {
     /// <param name="newSystemMarker">Type marker for the new system.</param>
     /// <param name="newSystemUpdate">Callback that will be called each frame before insertBefore.</param>
     /// <param name="insertBefore">The subsystem to insert the system before.</param>
-    /// <param name="runInFixedUpdate">Set the loop condition function to the same as the built-in FixedUpdate. NOTE: This doesn't work!</param>
-    public static void InsertSystemBefore(Type newSystemMarker, PlayerLoopSystem.UpdateFunction newSystemUpdate, Type insertBefore, bool runInFixedUpdate = false) {
+    public static void InsertSystemBefore(Type newSystemMarker, PlayerLoopSystem.UpdateFunction newSystemUpdate, Type insertBefore) {
         var playerLoopSystem = new PlayerLoopSystem {type = newSystemMarker, updateDelegate = newSystemUpdate};
-        if (runInFixedUpdate)
-            playerLoopSystem.loopConditionFunction = fixedUpdateLoopCondition;
         InsertSystemBefore(playerLoopSystem, insertBefore);
     }
 
@@ -103,13 +94,13 @@ public static class PlayerLoopInterface {
 
         EnsureSystemFetched();
 
-        InsertSystem(ref system, toInsert, insertAfter, InsertType.After, out var couldInsert);
+        InsertSystem(ref rootSystem, toInsert, insertAfter, InsertType.After, out var couldInsert);
         if (!couldInsert) {
             throw new ArgumentException($"When trying to insert the type {toInsert.type.Name} into the player loop after {insertAfter.Name}, " +
                                         $"{insertAfter.Name} could not be found in the current player loop!");
         }
 
-        PlayerLoop.SetPlayerLoop(system);
+        PlayerLoop.SetPlayerLoop(rootSystem);
     }
 
     /// <summary>
@@ -127,13 +118,13 @@ public static class PlayerLoopInterface {
 
         EnsureSystemFetched();
 
-        InsertSystem(ref system, toInsert, insertBefore, InsertType.Before, out var couldInsert);
+        InsertSystem(ref rootSystem, toInsert, insertBefore, InsertType.Before, out var couldInsert);
         if (!couldInsert) {
             throw new ArgumentException($"When trying to insert the type {toInsert.type.Name} into the player loop before {insertBefore.Name}, " +
                                         $"{insertBefore.Name} could not be found in the current player loop!");
         }
 
-        PlayerLoop.SetPlayerLoop(system);
+        PlayerLoop.SetPlayerLoop(rootSystem);
     }
 
     /// <summary>
@@ -142,33 +133,9 @@ public static class PlayerLoopInterface {
     /// there's no way to get any info about that.
     /// </summary>
     /// <returns>String representation of the current player loop system.</returns>
-    public static string CurrentLoopToString() {
-        var stringBuilder = new StringBuilder();
-
-        AppendSystemRecursive(system, stringBuilder, 0);
-        return stringBuilder.ToString();
-
-        void AppendSystemRecursive(PlayerLoopSystem pls, StringBuilder sb, int indentLevel) {
-            for (int i = 0; i < indentLevel * 2; i++) {
-                sb.Append(' ');
-            }
-
-            if (pls.type == null) {
-                sb.Append("null");
-                sb.Append('\n');
-            }
-            else {
-                sb.Append(pls.type.Name);
-                sb.Append('\n');
-            }
-
-            if(pls.subSystemList != null) {
-                indentLevel++;
-                foreach (var subSystem in pls.subSystemList) {
-                    AppendSystemRecursive(subSystem, sb, indentLevel);
-                }
-            }
-        }
+    public static string CurrentLoopToString()
+    {
+        return PrintSystemToString(rootSystem);
     }
 
     public static PlayerLoopSystem CopySystem(PlayerLoopSystem system) {
@@ -236,71 +203,59 @@ public static class PlayerLoopInterface {
         }
     }
 
-    private static bool TryFetchFixedUpdatePointer(PlayerLoopSystem loopSystem) {
-        if (loopSystem.type == typeof(FixedUpdate)) {
-            fixedUpdateLoopCondition = loopSystem.loopConditionFunction;
-            return true;
+    private static string PrintSystemToString(PlayerLoopSystem s) {
+        List<(PlayerLoopSystem, int)> systems = new List<(PlayerLoopSystem, int)>();
+
+        AddRecursively(s, 0);
+        void AddRecursively(PlayerLoopSystem system, int depth)
+        {
+            systems.Add((system, depth));
+            if (system.subSystemList != null)
+                foreach (var subsystem in system.subSystemList)
+                    AddRecursively(subsystem, depth + 1);
         }
 
-        var subSystems = loopSystem.subSystemList;
-        if (subSystems != null) {
-            foreach (var subSystem in subSystems) {
-                if (TryFetchFixedUpdatePointer(subSystem))
-                    return true;
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("Systems");
+        sb.AppendLine("=======");
+        foreach (var (system, depth) in systems)
+        {
+            // root system has a null type, all others has a marker type.
+            Append($"System Type: {system.type?.Name ?? "NULL"}");
+
+            // This is a C# delegate, so it's only set for functions created on the C# side.
+            Append($"Delegate: {system.updateDelegate}");
+
+            // This is a pointer, probably to the function getting run internally. Has long values (like 140700263204024) for the builtin ones concrete ones,
+            // while the builtin grouping functions has 0. So UnityEngine.PlayerLoop.Update has 0, while UnityEngine.PlayerLoop.Update.ScriptRunBehaviourUpdate
+            // has a concrete value.
+            Append($"Update Function: {system.updateFunction}");
+
+            // The loopConditionFunction seems to be a red herring. It's set to a value for only UnityEngine.PlayerLoop.FixedUpdate, but setting a different
+            // system to have the same loop condition function doesn't seem to do anything
+            Append($"Loop Condition Function: {system.loopConditionFunction}");
+
+            // null rather than an empty array when it's empty.
+            Append($"{system.subSystemList?.Length ?? 0} subsystems");
+
+            void Append(string s)
+            {
+                for (int i = 0; i < depth; i++)
+                    sb.Append("  ");
+                sb.AppendLine(s);
             }
         }
 
-        return false;
+        return sb.ToString();
     }
 
-    // Methods for listing sub system data. Kept around as this stuff is experimental, so being able to quickly check the info is convenient.
+    // [MenuItem("Test/Output current state to file")]
+    private static void OutputCurrentStateToFile()
+    {
+        EnsureSystemFetched();
+        var str = PrintSystemToString(rootSystem);
 
-    // The loop functions are somewhat weird - a bunch of functions have the same one (like FixedUpdate and Update and LateUpdate), so I assume that dispatch
-    // to the correct update loop happens inside of that one.
-    private static void FindAllNativeLoopFunctions() {
-        Dictionary<IntPtr, List<Type>> loopFunctionToSystems = new Dictionary<IntPtr, List<Type>>();
-        IntPtr GrabNativeLoops(PlayerLoopSystem pls) => pls.updateFunction;
-
-        FindNativeStuff(system, loopFunctionToSystems, GrabNativeLoops);
-
-        string text = "Loop functions\n";
-        foreach (var kvp in loopFunctionToSystems) {
-            var loopFunc   = kvp.Key;
-            var systemList = kvp.Value;
-
-            text += $"  function {loopFunc} used by:\n    {string.Join(", ", systemList.Select(sl => sl.Name))}\n";
-        }
-        Debug.Log(text);
-    }
-
-    // As of 2018.1.6f1, every single default system has the value 0 for their loop condition, except for FixedUpdate.
-    private static void FindAllNativeLoopConditions() {
-        Dictionary<IntPtr, List<Type>> conditionFunctionToSystems = new Dictionary<IntPtr, List<Type>>();
-        IntPtr GrabNativeConditions(PlayerLoopSystem pls) => pls.loopConditionFunction;
-
-        FindNativeStuff(system, conditionFunctionToSystems, GrabNativeConditions);
-
-        string text = "Condition functions\n";
-        foreach (var kvp in conditionFunctionToSystems) {
-            var loopFunc   = kvp.Key;
-            var systemList = kvp.Value;
-            text += $"  function {loopFunc} used by:\n    {string.Join(", ", systemList.Select(sl => sl.Name))}\n";
-        }
-        Debug.Log(text);
-    }
-
-    private static void FindNativeStuff(PlayerLoopSystem playerLoopSystem, Dictionary<IntPtr, List<Type>> ptrToSystems, Func<PlayerLoopSystem, IntPtr> grabPtr) {
-        var ptr = grabPtr(playerLoopSystem);
-
-        if (!ptrToSystems.ContainsKey(ptr))
-            ptrToSystems[ptr] = new List<Type>();
-
-        ptrToSystems[ptr].Add(playerLoopSystem.type);
-
-        if(playerLoopSystem.subSystemList != null) {
-            foreach (var subSystem in playerLoopSystem.subSystemList) {
-                FindNativeStuff(subSystem, ptrToSystems, grabPtr);
-            }
-        }
+        Debug.Log(str);
+        File.WriteAllText("playerLoopInterfaceOutput.txt", str);
     }
 }
