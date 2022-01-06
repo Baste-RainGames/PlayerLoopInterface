@@ -23,7 +23,7 @@ In older Unity versions, or if you don't want to open Unity, modify your Package
 Use PlayerLoopInterface.InsertSystemBefore/After to have a callback be executed every frame, before or after some built-in system.
 The built-in systems can be found under UnityEngine.PlayerLoop.
 
-Here's an example that adds an entry point that will be called every frame, just before Update:
+Here's an example that adds an entry point that will be called every frame, just before Unity's builtin Update function:
 
 ```cs
 public static class MyCustomSystem {
@@ -54,7 +54,8 @@ You can also insert a full PlayerLoopSystem instead of using the (Type, delegate
 
 ```cs
 var mySystem = new PlayerLoopSystem {
-    // The type seems to just be a marker. You can pass in pretty much whatever here.
+    // The type seems to just be a marker. You can pass in pretty much whatever here. It's used to identify the system, 
+    // both by PlayerLoopSystem and (pressumably) some Unity internals.
     type = typeof(MyCustomSystem),
 
     // This is the C# method that gets called when the system runs. All of the builtin systems has a null delegate here.
@@ -62,7 +63,7 @@ var mySystem = new PlayerLoopSystem {
 
     /* This is a System.IntPtr. It's set for all of the built in leaf systems (see subSystemList). It's probably a pointer 
      * to the c++ engine function that's run for those systems. Copying one could, in theory, allow you to eg. run the 
-     * builtin Update as your own thing, if you wanted? 
+     * builtin Update as your own thing, if you wanted? I haven't tested that!
      */
     updateFunction = IntPtr.Zero,
 
@@ -71,7 +72,8 @@ var mySystem = new PlayerLoopSystem {
     loopConditionFunction = IntPtr.Zero,
 
     /* List of subsystems. Builtin systems uses a null value rather than an empty array for no subsystems.
-     * Note that systems are structs, so managing the subsystem relations require a lot of care to 
+     * Note that systems are structs, so managing the subsystem relations requires a bit of juggling to maintain the 
+     * subsystem tree.
      * 
      * Systems are organized in a tree-like structure. The builtin has a root system (with type Null), which has a few 
      * subsystems - like EarlyUpdate, FixedUpdate and Update. Those seem to be "folder" systems, as none of them have 
@@ -85,10 +87,4 @@ PlayerLoopInterface.InsertSystemBefore(mySystem, typeof(UnityEngine.PlayerLoop.U
 
 ## Known Issues
 
-- When you make changes to the PlayerLoopSystem, they don't get changed back after exiting play mode. This causes systems you have added to be run at edit time (for some reason), which causes all kinds of problems. According to Unity, this is "by design". Because of this, the PlayerLoopInterface makes a backup of the player loop on startup, and resets to that default whenever you exit play mode. 
-
-- Because of the above and the fact that PlayerLoopSystems are structs, I don't know of a way to support working together with other systems that edits the PlayerLoopSystem. This means that PlayerLoopInterface is incompatible with any other system that edits the PlayerLoopSystem!
-
-- Relating to the above - Probably doesn't work with DOTS! I haven't tried, but I know that the PlayerLoopSystem is supposed to be used a bunch by DOTS. You probably won't need this in a DOTS-based world, since that's made to run your own systems in a different way.
-
-
+- When you make changes to the PlayerLoopSystem, they don't get changed back after exiting play mode. This causes systems you have added to be run at edit time (for some reason), which causes all kinds of problems. According to Unity, this is "by design", and it has been used internally (see https://github.com/Unity-Technologies/InputSystem/pull/1424/files#diff-9e93fa9ce6927588c3ffd63c65e117f9aa8879e106f379f0a1d1f19db79a40d0R125). Because of this, the PlayerLoopInterface makes a note of all the systems you have inserted, and removes them on exiting play mode. If you want systems to persist and between beyond play modes, you have to use the PlayerLoop manually

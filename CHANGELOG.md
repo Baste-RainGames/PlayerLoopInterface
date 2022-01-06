@@ -20,3 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Minor doc improvements
 - Update package.json to have documentation, changelog and license url's.
+
+## [2.0.2] - 2022-06-01
+### Fixed
+- Made PlayerLoopInterface only clean up the systems added through the interface, rather than all functions. This fixes an incompatibility with the Input System, and probably a bunch of other issues!
