@@ -27,28 +27,18 @@ using UnityEngine.Experimental.PlayerLoop;
 /// </summary>
 public static class PlayerLoopInterface {
 
-    private static bool hasFetchedSystem;
-
-    // We write to this
-    private static PlayerLoopSystem rootSystem;
+    private static List<PlayerLoopSystem> insertedSystems = new List<PlayerLoopSystem>();
 
     [RuntimeInitializeOnLoadMethod]
     private static void Initialize() {
-        EnsureSystemFetched();
-    }
+        // Systems are not automatically removed from the PlayerLoop, so we need to clean up the ones that have been added in play mode, as they'd otherwise
+        // keep running when outside play mode, and in the next play mode if we don't have assembly reload turned on.
 
-    private static void EnsureSystemFetched() {
-        if (hasFetchedSystem)
-            return;
-
-        var defaultSystem = PlayerLoop.GetDefaultPlayerLoop();
-        rootSystem = CopySystem(defaultSystem);
-        hasFetchedSystem = true;
-
-        // if the Entities package is not installed, any systems registered keeps running after we leave play mode.
-        // This is "intended behaviour". Not joking. https://fogbugz.unity3d.com/default.asp?1089518_lub560iemcggi1c9
         PlayerLoopQuitChecker.GameQuitCallback += () => {
-            PlayerLoop.SetPlayerLoop(defaultSystem);
+            foreach (var playerLoopSystem in insertedSystems)
+                TryRemoveSystem(playerLoopSystem.type);
+
+            insertedSystems.Clear();
         };
     }
 
@@ -92,7 +82,7 @@ public static class PlayerLoopInterface {
         if (insertAfter == null)
             throw new ArgumentNullException(nameof(insertAfter));
 
-        EnsureSystemFetched();
+        var rootSystem = PlayerLoop.GetCurrentPlayerLoop();
 
         InsertSystem(ref rootSystem, toInsert, insertAfter, InsertType.After, out var couldInsert);
         if (!couldInsert) {
@@ -100,6 +90,7 @@ public static class PlayerLoopInterface {
                                         $"{insertAfter.Name} could not be found in the current player loop!");
         }
 
+        insertedSystems.Add(toInsert);
         PlayerLoop.SetPlayerLoop(rootSystem);
     }
 
@@ -116,8 +107,7 @@ public static class PlayerLoopInterface {
         if (insertBefore == null)
             throw new ArgumentNullException(nameof(insertBefore));
 
-        EnsureSystemFetched();
-
+        var rootSystem = PlayerLoop.GetCurrentPlayerLoop();
         InsertSystem(ref rootSystem, toInsert, insertBefore, InsertType.Before, out var couldInsert);
         if (!couldInsert) {
             throw new ArgumentException($"When trying to insert the type {toInsert.type.Name} into the player loop before {insertBefore.Name}, " +
@@ -128,14 +118,42 @@ public static class PlayerLoopInterface {
     }
 
     /// <summary>
-    /// Utility to get a string representation of the current player loop.
-    /// Note that this is the current player loop as the PlayerLoopInterface believes it to be, if a different system changes the underlying player loop system,
-    /// there's no way to get any info about that.
+    /// Tries to remove a system from the PlayerLoop. The first system found that has the same type identifier as the supplied one will be removed.
     /// </summary>
-    /// <returns>String representation of the current player loop system.</returns>
-    public static string CurrentLoopToString()
-    {
-        return PrintSystemToString(rootSystem);
+    /// <param name="type">Type identifier of the system to remove</param>
+    /// <returns></returns>
+    public static bool TryRemoveSystem(Type type) {
+        if (type == null)
+            throw new ArgumentNullException(nameof(type), "Trying to remove a null type!");
+
+        var currentSystem = PlayerLoop.GetCurrentPlayerLoop();
+        var couldRemove = TryRemoveTypeFrom(ref currentSystem, type);
+        PlayerLoop.SetPlayerLoop(currentSystem);
+        return couldRemove;
+    }
+
+    private static bool TryRemoveTypeFrom(ref PlayerLoopSystem currentSystem, Type type) {
+        var subSystems = currentSystem.subSystemList;
+        if (subSystems == null)
+            return false;
+
+        for (int i = 0; i < subSystems.Length; i++) {
+            if (subSystems[i].type == type) {
+                var newSubSystems = new PlayerLoopSystem[subSystems.Length - 1];
+
+                Array.Copy(subSystems, newSubSystems, i);
+                Array.Copy(subSystems, i + 1, newSubSystems, i, subSystems.Length - i - 1);
+
+                currentSystem.subSystemList = newSubSystems;
+
+                return true;
+            }
+
+            if (TryRemoveTypeFrom(ref subSystems[i], type))
+                return true;
+        }
+
+        return false;
     }
 
     public static PlayerLoopSystem CopySystem(PlayerLoopSystem system) {
@@ -202,6 +220,15 @@ public static class PlayerLoopInterface {
             couldInsert = false;
         }
     }
+    
+    /// <summary>
+    /// Utility to get a string representation of the current player loop.
+    /// </summary>
+    /// <returns>String representation of the current player loop system.</returns>
+    public static string CurrentLoopToString()
+    {
+        return PrintSystemToString(PlayerLoop.GetCurrentPlayerLoop());
+    }
 
     private static string PrintSystemToString(PlayerLoopSystem s) {
         List<(PlayerLoopSystem, int)> systems = new List<(PlayerLoopSystem, int)>();
@@ -252,8 +279,7 @@ public static class PlayerLoopInterface {
     // [MenuItem("Test/Output current state to file")]
     private static void OutputCurrentStateToFile()
     {
-        EnsureSystemFetched();
-        var str = PrintSystemToString(rootSystem);
+        var str = PrintSystemToString(PlayerLoop.GetCurrentPlayerLoop());
 
         Debug.Log(str);
         File.WriteAllText("playerLoopInterfaceOutput.txt", str);
