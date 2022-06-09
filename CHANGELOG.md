@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - not changelogged properly
 - Initial version
 
-## [2.0.0] - 2021-10-11
+## [2.0.0] - 2021 October 10
 ### Removed
 - Removed the runInFixedUpdate parameter, as it didn't do anything.
 ### Added
@@ -16,11 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Replaced a bunch of different internal logging functions with one good one.
 
-## [2.0.1] - 2021-10-11
+## [2.0.1] - 2021 October 11
 ### Added
 - Minor doc improvements
 - Update package.json to have documentation, changelog and license url's.
 
-## [2.0.2] - 2022-06-01
+## [2.0.2] - 2022 January 06
 ### Fixed
 - Made PlayerLoopInterface only clean up the systems added through the interface, rather than all functions. This fixes an incompatibility with the Input System, and probably a bunch of other issues!
+
+## [2.0.3] - 2022 June 09
+### Fixed 
+- Fixed systems added through InsertSystemBefore not getting cleaned up when playmode was exited.

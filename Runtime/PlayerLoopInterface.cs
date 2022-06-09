@@ -114,6 +114,7 @@ public static class PlayerLoopInterface {
                                         $"{insertBefore.Name} could not be found in the current player loop!");
         }
 
+        insertedSystems.Add(toInsert);
         PlayerLoop.SetPlayerLoop(rootSystem);
     }
 
