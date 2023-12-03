@@ -34,12 +34,17 @@ public static class PlayerLoopInterface {
         // Systems are not automatically removed from the PlayerLoop, so we need to clean up the ones that have been added in play mode, as they'd otherwise
         // keep running when outside play mode, and in the next play mode if we don't have assembly reload turned on.
 
-        PlayerLoopQuitChecker.GameQuitCallback += () => {
-            foreach (var playerLoopSystem in insertedSystems)
-                TryRemoveSystem(playerLoopSystem.type);
+        Application.quitting += ClearInsertedSystems;
+    }
 
-            insertedSystems.Clear();
-        };
+    private static void ClearInsertedSystems ()
+    {
+        foreach (var playerLoopSystem in insertedSystems)
+            TryRemoveSystem(playerLoopSystem.type);
+
+        insertedSystems.Clear();
+
+        Application.quitting -= ClearInsertedSystems;
     }
 
     private enum InsertType {

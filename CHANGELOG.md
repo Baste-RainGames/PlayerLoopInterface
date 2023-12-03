@@ -28,3 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.3] - 2022 June 09
 ### Fixed 
 - Fixed systems added through InsertSystemBefore not getting cleaned up when playmode was exited.
+
+## [2.0.4] - 2023 November 03
+### Removed
+- Removed the PlayerLoopQuitChecker Monobehavivour, as all we needed was the Application.quitting event.
+### Fixed
+- Fixed the PlayerLoopQuitChecker objects were never destroyed in the editor. So in addition to using the Application.quitting event, we will make sure to unsubscribe to the event every time it has been called. That way, no memory should be referred between runs of play mode.
