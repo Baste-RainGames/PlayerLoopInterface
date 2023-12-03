@@ -1,6 +1,6 @@
 {
   "name": "com.baste.playerloopinterface",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "displayName": "Player Loop Interface",
   "description": "Interface for Unity's PlayerLoop System",
   "unity" : "2018.4",
